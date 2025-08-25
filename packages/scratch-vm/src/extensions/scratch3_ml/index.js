@@ -218,8 +218,8 @@ async function fetchProjectName() {
         
         if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
             console.log('ML Extension: CORS error detected. This usually means:');
-            console.log('  1. Your backend needs CORS configuration for localhost:8601');
-            console.log('  2. Or update config.js to use your frontend port (localhost:3000)');
+            console.log('  1. Your backend needs CORS configuration for the scratch editor domain');
+            console.log('  2. Or check if the backend URL is correct in config.js');
             console.log('  3. Or use MLExtension.setProjectName() to set name manually');
         }
         
@@ -858,9 +858,7 @@ if (typeof window !== 'undefined') {
         },
         testCORS: async () => {
             const testUrls = [
-                `${API_BASE_URL}/api/guests/session/test/projects/test`,
-                'http://localhost:8080/api/guests/session/test/projects/test',
-                'http://localhost:3000/api/guests/session/test/projects/test'
+                `${API_BASE_URL}/api/guests/session/test/projects/test`
             ];
             
             const results = [];
@@ -894,8 +892,8 @@ if (typeof window !== 'undefined') {
                 results: results,
                 currentConfig: API_BASE_URL,
                 recommendation: results.find(r => r.success && r.cors !== 'Not set') 
-                    ? 'Use the URL that shows CORS headers' 
-                    : 'Configure CORS in your backend'
+                    ? 'Backend is accessible and CORS is configured' 
+                    : 'Configure CORS in your backend for the scratch editor domain'
             };
         },
         syncWithUrl: () => {
