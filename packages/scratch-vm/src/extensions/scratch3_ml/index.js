@@ -66,6 +66,94 @@ function extractIdsFromURL() {
     return false;
 }
 
+// Function to force clear all project data and start fresh
+function forceClearAllProjectData() {
+    console.log('ML Extension: Force clearing all project data...');
+    
+    // Clear all stored data
+    clearStorage();
+    
+    // Clear any cached Scratch data
+    if (typeof window !== 'undefined' && window.Scratch && window.Scratch.vm) {
+        try {
+            // Clear the workspace
+            if (window.Scratch.vm.clearWorkspace) {
+                window.Scratch.vm.clearWorkspace();
+                console.log('ML Extension: Scratch workspace cleared');
+            }
+            
+            // Refresh the workspace
+            if (window.Scratch.vm.refreshWorkspace) {
+                window.Scratch.vm.refreshWorkspace();
+                console.log('ML Extension: Scratch workspace refreshed');
+            }
+        } catch (e) {
+            console.log('ML Extension: Could not clear/refresh workspace:', e.message);
+        }
+    }
+    
+    // Re-initialize with URL parameters
+    const urlExtracted = extractIdsFromURL();
+    if (urlExtracted) {
+        console.log(`ML Extension: Successfully re-initialized with URL - Session: ${SESSION_ID}, Project: ${PROJECT_ID}`);
+        
+        // Store new values
+        saveToStorage(config.STORAGE_KEYS.SESSION_ID, SESSION_ID);
+        saveToStorage(config.STORAGE_KEYS.PROJECT_ID, PROJECT_ID);
+        
+        // Fetch new project name
+        fetchProjectName();
+        
+        return true;
+    }
+    
+    return false;
+}
+
+// Function to force refresh extension when URL parameters change
+function forceRefreshForNewProject() {
+    console.log('ML Extension: Force refreshing for new project...');
+    
+    // Clear all stored data
+    clearStorage();
+    
+    // Re-initialize with URL parameters
+    const urlExtracted = extractIdsFromURL();
+    if (urlExtracted) {
+        console.log(`ML Extension: Successfully refreshed with new URL - Session: ${SESSION_ID}, Project: ${PROJECT_ID}`);
+        
+        // Store new values
+        saveToStorage(config.STORAGE_KEYS.SESSION_ID, SESSION_ID);
+        saveToStorage(config.STORAGE_KEYS.PROJECT_ID, PROJECT_ID);
+        
+        // Try to clear Scratch workspace to ensure clean slate
+        if (typeof window !== 'undefined' && window.Scratch && window.Scratch.vm) {
+            try {
+                // Clear the workspace
+                if (window.Scratch.vm.clearWorkspace) {
+                    window.Scratch.vm.clearWorkspace();
+                    console.log('ML Extension: Scratch workspace cleared for new project');
+                }
+                
+                // Refresh the workspace
+                if (window.Scratch.vm.refreshWorkspace) {
+                    window.Scratch.vm.refreshWorkspace();
+                    console.log('ML Extension: Scratch workspace refreshed for new project');
+                }
+            } catch (e) {
+                console.log('ML Extension: Could not clear/refresh workspace, but extension refreshed:', e.message);
+            }
+        }
+        
+        // Fetch new project name
+        fetchProjectName();
+        
+        return true;
+    }
+    
+    return false;
+}
+
 // Load IDs from URL FIRST, then localStorage as fallback
 function initializeIds() {
     // ALWAYS prioritize URL parameters over localStorage
@@ -75,6 +163,36 @@ function initializeIds() {
     const urlExtracted = extractIdsFromURL();
     if (urlExtracted) {
         console.log(`ML Extension: Successfully extracted from URL - Session: ${SESSION_ID}, Project: ${PROJECT_ID}`);
+        
+        // ALWAYS clear localStorage when URL parameters are present to ensure fresh start
+        const storedSessionId = loadFromStorage(config.STORAGE_KEYS.SESSION_ID);
+        const storedProjectId = loadFromStorage(config.STORAGE_KEYS.PROJECT_ID);
+        
+        // If we have stored values and they're different from URL values, clear everything
+        if (storedSessionId && storedProjectId && 
+            (storedSessionId !== SESSION_ID || storedProjectId !== PROJECT_ID)) {
+            console.log('ML Extension: URL parameters changed, clearing localStorage to prevent project conflicts');
+            clearStorage();
+            
+            // Also clear any cached project data
+            if (typeof window !== 'undefined' && window.Scratch && window.Scratch.vm) {
+                try {
+                    // Clear the workspace
+                    if (window.Scratch.vm.clearWorkspace) {
+                        window.Scratch.vm.clearWorkspace();
+                        console.log('ML Extension: Scratch workspace cleared for new project');
+                    }
+                    
+                    // Refresh the workspace
+                    if (window.Scratch.vm.refreshWorkspace) {
+                        window.Scratch.vm.refreshWorkspace();
+                        console.log('ML Extension: Scratch workspace refreshed for new project');
+                    }
+                } catch (e) {
+                    console.log('ML Extension: Could not clear/refresh workspace, but extension refreshed:', e.message);
+                }
+            }
+        }
         
         // Store URL values in localStorage for consistency
         saveToStorage(config.STORAGE_KEYS.SESSION_ID, SESSION_ID);
@@ -711,10 +829,31 @@ function checkForMismatches() {
 // Initialize extension
 const extensionObject = new MLExtension();
 
-// Check for mismatches after initialization
-setTimeout(() => {
-    checkForMismatches();
-}, 1000); // Small delay to ensure everything is loaded
+// Always clear old project data on initialization to prevent conflicts
+console.log('ML Extension: Initializing - clearing any old project data...');
+clearStorage();
+
+// Add URL change listener to automatically detect project changes
+if (typeof window !== 'undefined') {
+    let currentUrl = window.location.href;
+    
+    // Check for URL changes every second
+    setInterval(() => {
+        if (window.location.href !== currentUrl) {
+            console.log('ML Extension: URL changed, checking for new project...');
+            currentUrl = window.location.href;
+            
+            // Check if session or project ID changed
+            const newUrlExtracted = extractIdsFromURL();
+            if (newUrlExtracted && (SESSION_ID !== extensionObject.getIds().sessionId || PROJECT_ID !== extensionObject.getIds().projectId)) {
+                console.log('ML Extension: New project detected, refreshing extension...');
+                forceRefreshForNewProject();
+            }
+        }
+    }, 1000);
+    
+    console.log('ML Extension: URL change listener initialized');
+}
 
 // Set up periodic refresh of extension name from both localStorage and API
 setInterval(() => {
@@ -949,6 +1088,32 @@ if (typeof window !== 'undefined') {
                 return { success: false, error: 'No localStorage data found' };
             }
         },
+        forceRefreshForNewProject: () => {
+            // Force refresh for new project (clears localStorage and re-initializes)
+            return forceRefreshForNewProject();
+        },
+        forceClearAllProjectData: () => {
+            // Force clear all project data and start completely fresh
+            return forceClearAllProjectData();
+        },
+        manualRefresh: () => {
+            // Manual refresh function for users to call from console
+            console.log('ML Extension: Manual refresh requested by user...');
+            
+            // Clear everything and start fresh
+            clearStorage();
+            
+            // Re-initialize
+            const success = initializeIds();
+            
+            if (success) {
+                console.log('ML Extension: Manual refresh successful!');
+                return { success: true, message: 'Extension manually refreshed successfully' };
+            } else {
+                console.log('ML Extension: Manual refresh failed');
+                return { success: false, error: 'Manual refresh failed - check console for details' };
+            }
+        },
         getStatus: () => {
             // Get comprehensive status of the extension
             const url = window.location.href;
@@ -1143,6 +1308,9 @@ if (typeof window !== 'undefined') {
     console.log('  - MLExtension.testCORS()');
     console.log('  - MLExtension.syncWithUrl() - Sync localStorage with URL parameters (primary)');
     console.log('  - MLExtension.forceUseLocalStorage() - Force use localStorage values (fallback)');
+    console.log('  - MLExtension.forceRefreshForNewProject() - Force refresh for new project (clears localStorage and re-initializes)');
+    console.log('  - MLExtension.forceClearAllProjectData() - Force clear all project data and start completely fresh');
+    console.log('  - MLExtension.manualRefresh() - Manual refresh function for users to call from console');
     console.log('  - MLExtension.getStatus() - Get comprehensive extension status');
     console.log('  - MLExtension.updateExtensionName() - Update extension name in Scratch');
     console.log('  - MLExtension.refreshExtensionDisplay() - Refresh entire extension display');
