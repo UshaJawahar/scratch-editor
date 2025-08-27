@@ -599,11 +599,11 @@ class MLExtension {
                     arguments: {
                         SESSION_ID: {
                             type: ArgumentType.STRING,
-                            defaultValue: 'session_aa3bffbf72c444c5'
+                            defaultValue: ''
                         },
                         PROJECT_ID: {
                             type: ArgumentType.STRING,
-                            defaultValue: 'eff8a1b8-4998-442a-a3a2-2e386ddbc9b8'
+                            defaultValue: ''
                         }
                     }
                 },
